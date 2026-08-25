@@ -1,6 +1,6 @@
 #FileLock
-#Wed Aug 26 00:03:16 IST 2026
-server=127.0.0.2\:46273
+#Wed Aug 26 00:13:47 IST 2026
+server=10.12.230.102\:33155
 hostName=archlinux
 method=file
-id=1a03a32a9dd772ace77aab69cb32635355043ae0c2e
+id=1a03a3c4d18a6c1e91e20d8e41a46a33d94df46d85f
