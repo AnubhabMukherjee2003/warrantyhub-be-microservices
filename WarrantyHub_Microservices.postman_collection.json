@@ -1,0 +1,603 @@
+{
+  "info": {
+    "_postman_id": "f62a5fd2-5e46-4a4a-85c3-microservices",
+    "name": "WarrantyHub Microservices API",
+    "description": "Gateway-based WarrantyHub microservices workflow. Run requests in order. The first request creates unique emails and later requests reuse collection variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080",
+      "type": "string"
+    },
+    {
+      "key": "companyToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "purchaseId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "requestId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "companyEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customerEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "password123",
+      "type": "string"
+    },
+    {
+      "key": "invoiceNumber",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Setup & Company",
+      "item": [
+        {
+          "name": "1. Create Company",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const suffix = Date.now();",
+                  "pm.collectionVariables.set('companyEmail', `acme${suffix}@example.com`);",
+                  "pm.collectionVariables.set('customerEmail', `asha${suffix}@example.com`);",
+                  "pm.collectionVariables.set('invoiceNumber', `INV-${suffix}`);",
+                  "pm.collectionVariables.unset('companyToken');",
+                  "pm.collectionVariables.unset('customerToken');",
+                  "pm.collectionVariables.unset('purchaseId');",
+                  "pm.collectionVariables.unset('requestId');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('company created', function () {",
+                  "  pm.expect(pm.response.code).to.eql(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"Acme Corp\",\n  \"email\": \"{{companyEmail}}\",\n  \"password\": \"{{password}}\",\n  \"phone\": \"9999999999\",\n  \"status\": \"ACTIVE\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "companies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "2. Login Company",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('company login OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "pm.collectionVariables.set('companyToken', pm.response.text());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{companyEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "3. Create Purchase Bundle",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('purchase bundle created', function () {",
+                  "  pm.expect(pm.response.code).to.eql(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('purchaseId', json.purchaseId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{companyToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerName\": \"Asha\",\n  \"customerEmail\": \"{{customerEmail}}\",\n  \"customerPhone\": \"8888888888\",\n  \"customerPassword\": \"{{password}}\",\n  \"productName\": \"SuperPhone\",\n  \"productCategory\": \"Mobile\",\n  \"modelNumber\": \"SP-100\",\n  \"warrantyPeriod\": 12,\n  \"warrantyUnit\": \"MONTHS\",\n  \"warrantyTerms\": \"Standard coverage\",\n  \"purchaseDate\": \"2026-08-16\",\n  \"invoiceNumber\": \"{{invoiceNumber}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/purchases",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "purchases"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Customer",
+      "item": [
+        {
+          "name": "4. Login Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('customer login OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});",
+                  "pm.collectionVariables.set('customerToken', pm.response.text());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{customerEmail}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            }
+          }
+        },
+        {
+          "name": "5. Get Customer Products",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('customer products loaded', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(pm.response.json().length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/me/products",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "me",
+                "products"
+              ]
+            }
+          }
+        },
+        {
+          "name": "6. Get Customer Service Requests Before Create",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('customer requests endpoint works', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/customers/service-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "customers",
+                "service-requests"
+              ]
+            }
+          }
+        },
+        {
+          "name": "7. Create Service Request",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('service request created', function () {",
+                  "  pm.expect(pm.response.code).to.eql(201);",
+                  "});",
+                  "const json = pm.response.json();",
+                  "pm.collectionVariables.set('requestId', json.requestId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purchaseId\": {{purchaseId}},\n  \"issueCategory\": \"Battery\",\n  \"issueDescription\": \"Battery drains quickly\",\n  \"photoUrl\": \"http://example.com/photo.jpg\",\n  \"videoUrl\": \"http://example.com/video.mp4\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/service-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "service-requests"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Service Operations",
+      "item": [
+        {
+          "name": "8. Get Service Request Details",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('service request details loaded', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/service-requests/{{requestId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "service-requests",
+                "{{requestId}}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "9. Get Company Service Requests",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('company requests loaded', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(pm.response.json().length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{companyToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/company/service-requests",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "company",
+                "service-requests"
+              ]
+            }
+          }
+        },
+        {
+          "name": "10. Update Service Request Status",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('status updated', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(pm.response.json().currentStatus).to.eql('UNDER_REVIEW');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{companyToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"UNDER_REVIEW\",\n  \"remarks\": \"Technician assigned\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/service-requests/{{requestId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "service-requests",
+                "{{requestId}}",
+                "status"
+              ]
+            }
+          }
+        },
+        {
+          "name": "11. Get Service Request History",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('history loaded', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "  pm.expect(pm.response.json().history.length).to.be.above(1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{customerToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/service-requests/{{requestId}}/history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "service-requests",
+                "{{requestId}}",
+                "history"
+              ]
+            }
+          }
+        },
+        {
+          "name": "12. Get Health",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('health OK', function () {",
+                  "  pm.expect(pm.response.code).to.eql(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
