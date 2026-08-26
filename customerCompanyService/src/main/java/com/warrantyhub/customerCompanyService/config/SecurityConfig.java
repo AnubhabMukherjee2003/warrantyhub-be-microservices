@@ -4,9 +4,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -24,9 +22,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    public SecurityConfig(
-            JwtAuthenticationFilter jwtAuthenticationFilter) {
-
+    public SecurityConfig(JwtAuthenticationFilter jwtAuthenticationFilter) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     }
 
@@ -47,69 +43,28 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http)
-            throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         http
             .csrf(csrf -> csrf.disable())
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-            .sessionManagement(session -> session
-                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-            )
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .exceptionHandling(exception -> exception
                 .authenticationEntryPoint((request, response, authException) -> {
                     response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
                     response.setContentType("application/json");
-                    response.getWriter().write(
-                            "{\"message\":\"Invalid credentials or authentication is required\"}"
-                    );
+                    response.getWriter().write("{\"message\":\"Invalid credentials or authentication is required\"}");
                 })
             )
-            .headers(headers -> headers
-                .frameOptions(frameOptions -> frameOptions.sameOrigin())
-            )
+            .headers(headers -> headers.frameOptions(frameOptions -> frameOptions.sameOrigin()))
             .authorizeHttpRequests(auth -> auth
-        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-        .requestMatchers("/api/auth/login").permitAll()
-        .requestMatchers("/api/health").permitAll()
-        .requestMatchers("/h2-console/**").permitAll()
-        .requestMatchers(HttpMethod.POST, "/api/customers").permitAll()
-
-        .requestMatchers(HttpMethod.POST, "/api/companies").permitAll()
-
-        .requestMatchers(HttpMethod.GET, "/api/customers/me/products")
-        .hasRole("CUSTOMER")
-
-        .requestMatchers(HttpMethod.GET, "/api/company/service-requests")
-        .hasRole("COMPANY")
-
-        .requestMatchers(HttpMethod.POST, "/api/purchases")
-        .hasRole("COMPANY")
-
-        .requestMatchers(HttpMethod.POST, "/api/service-requests")
-        .hasRole("CUSTOMER")
-
-        .requestMatchers(
-                HttpMethod.GET,
-                "/api/service-requests/*")
-        .hasRole("CUSTOMER")
-
-        .requestMatchers(
-                HttpMethod.GET,
-                "/api/service-requests/*/history")
-        .hasAnyRole("CUSTOMER", "COMPANY")
-
-        .requestMatchers(
-                HttpMethod.PUT,
-                "/api/service-requests/*/status")
-        .hasRole("COMPANY")
-
-        .anyRequest().authenticated()
-)
-            .addFilterBefore(
-                jwtAuthenticationFilter,
-                UsernamePasswordAuthenticationFilter.class
-            );
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers("/api/auth/login", "/api/health", "/h2-console/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/companies", "/api/customers").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/companies/**", "/api/customers/**").permitAll()
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

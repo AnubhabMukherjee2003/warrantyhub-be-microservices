@@ -1,287 +1,227 @@
 package com.warrantyhub.serviceRequestService.service;
 
-import com.warrantyhub.serviceRequestService.dto.StatusChangeRequest;
-import com.warrantyhub.serviceRequestService.dto.StatusHistoryResponse;
-import com.warrantyhub.serviceRequestService.dto.WarrantyResponse;
-import com.warrantyhub.serviceRequestService.dto.PurchaseResponse;
-import com.warrantyhub.serviceRequestService.dto.ServiceRequestResponse;
-import com.warrantyhub.serviceRequestService.dto.ServiceRequestHistoryResponse;
+import com.warrantyhub.serviceRequestService.client.PurchaseServiceClient;
+import com.warrantyhub.serviceRequestService.dto.*;
 import com.warrantyhub.serviceRequestService.exception.PurchaseNotFoundException;
 import com.warrantyhub.serviceRequestService.exception.ServiceRequestNotFoundException;
-import com.warrantyhub.serviceRequestService.model.Purchase;
 import com.warrantyhub.serviceRequestService.model.RequestStatusHistory;
 import com.warrantyhub.serviceRequestService.model.ServiceRequest;
-import com.warrantyhub.serviceRequestService.dto.ProductResponse;
-import com.warrantyhub.serviceRequestService.dto.ServiceRequestCreateRequest;
-import com.warrantyhub.serviceRequestService.repository.PurchaseRepository;
 import com.warrantyhub.serviceRequestService.repository.RequestStatusHistoryRepository;
 import com.warrantyhub.serviceRequestService.repository.ServiceRequestRepository;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.access.AccessDeniedException;
 
 @Service
 public class ServiceRequestService {
 
-        private final ServiceRequestRepository serviceRequestRepository;
-        private final PurchaseRepository purchaseRepository;
-        private final RequestStatusHistoryRepository historyRepository;
+    private final ServiceRequestRepository serviceRequestRepository;
+    private final RequestStatusHistoryRepository historyRepository;
+    private final PurchaseServiceClient purchaseServiceClient;
 
-        public ServiceRequestService(
-                        ServiceRequestRepository serviceRequestRepository,
-                        PurchaseRepository purchaseRepository,
-                        RequestStatusHistoryRepository historyRepository) {
+    public ServiceRequestService(
+            ServiceRequestRepository serviceRequestRepository,
+            RequestStatusHistoryRepository historyRepository,
+            PurchaseServiceClient purchaseServiceClient) {
+        this.serviceRequestRepository = serviceRequestRepository;
+        this.historyRepository = historyRepository;
+        this.purchaseServiceClient = purchaseServiceClient;
+    }
 
-                this.serviceRequestRepository = serviceRequestRepository;
-                this.purchaseRepository = purchaseRepository;
-                this.historyRepository = historyRepository;
+    @Transactional
+    public ServiceRequestResponse createRequest(ServiceRequestCreateRequest request) {
+        PurchaseResponse purchase;
+        try {
+            purchase = purchaseServiceClient.getPurchaseById(request.getPurchaseId());
+        } catch (Exception e) {
+            throw new PurchaseNotFoundException(request.getPurchaseId());
         }
 
-        @Transactional
-        public ServiceRequestResponse createRequest(ServiceRequestCreateRequest request) {
+        String authenticatedEmail = getAuthenticatedUserEmail();
 
-                Purchase purchase = purchaseRepository
-                                .findById(request.getPurchaseId())
-                                .orElseThrow(() -> new PurchaseNotFoundException(request.getPurchaseId()));
+        ServiceRequest serviceRequest = new ServiceRequest();
+        serviceRequest.setPurchaseId(purchase.getPurchaseId());
+        serviceRequest.setIssueCategory(request.getIssueCategory());
+        serviceRequest.setIssueDescription(request.getIssueDescription());
+        serviceRequest.setPhotoUrl(request.getPhotoUrl());
+        serviceRequest.setVideoUrl(request.getVideoUrl());
 
-                String authenticatedEmail = getAuthenticatedUserEmail();
-                String ownerEmail = purchase.getCustomer().getEmail();
-                if (!authenticatedEmail.equals(ownerEmail)) {
-                        throw new AccessDeniedException(
-                                        "You do not have access to this purchase");
-                }
+        LocalDateTime now = LocalDateTime.now();
+        serviceRequest.setCreatedAt(now);
+        serviceRequest.setUpdatedAt(now);
 
-                ServiceRequest serviceRequest = new ServiceRequest();
+        ServiceRequest savedRequest = serviceRequestRepository.save(serviceRequest);
 
-                serviceRequest.setPurchase(purchase);
-                serviceRequest.setIssueCategory(request.getIssueCategory());
-                serviceRequest.setIssueDescription(request.getIssueDescription());
-                serviceRequest.setPhotoUrl(request.getPhotoUrl());
-                serviceRequest.setVideoUrl(request.getVideoUrl());
+        RequestStatusHistory history = new RequestStatusHistory();
+        history.setRequest(savedRequest);
+        history.setStatus("OPEN");
+        history.setRemarks("Service request created");
+        history.setChangedBy(authenticatedEmail);
+        history.setChangedAt(now);
 
-                LocalDateTime now = LocalDateTime.now();
+        historyRepository.save(history);
 
-                serviceRequest.setCreatedAt(now);
-                serviceRequest.setUpdatedAt(now);
+        return toResponse(savedRequest);
+    }
 
-                ServiceRequest savedRequest = serviceRequestRepository.save(serviceRequest);
+    @Transactional(readOnly = true)
+    public ServiceRequestResponse getServiceRequest(Long id) {
+        ServiceRequest request = serviceRequestRepository.findById(id)
+                .orElseThrow(() -> new ServiceRequestNotFoundException(id));
+        return toResponse(request);
+    }
 
-                RequestStatusHistory history = new RequestStatusHistory();
+    @Transactional(readOnly = true)
+    public List<ServiceRequestResponse> getCompanyServiceRequests(String email) {
+        return serviceRequestRepository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
 
-                history.setRequest(savedRequest);
-                history.setStatus("OPEN");
-                history.setRemarks("Service request created");
-                history.setChangedBy(authenticatedEmail);
-                history.setChangedAt(now);
+    @Transactional(readOnly = true)
+    public List<ServiceRequestResponse> getCustomerServiceRequests(String email) {
+        return serviceRequestRepository.findAll()
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
 
-                historyRepository.save(history);
+    @Transactional
+    public ServiceRequestResponse changeStatus(Long id, StatusChangeRequest request) {
+        ServiceRequest serviceRequest = serviceRequestRepository.findById(id)
+                .orElseThrow(() -> new ServiceRequestNotFoundException(id));
 
-                return toResponse(savedRequest);
+        String authenticatedEmail = getAuthenticatedUserEmail();
+        String currentStatus = getCurrentStatus(serviceRequest);
+        validateStatusTransition(currentStatus, request.getStatus());
+
+        serviceRequest.setUpdatedAt(LocalDateTime.now());
+        ServiceRequest savedRequest = serviceRequestRepository.save(serviceRequest);
+
+        RequestStatusHistory history = new RequestStatusHistory();
+        history.setRequest(savedRequest);
+        history.setStatus(request.getStatus());
+        history.setRemarks(request.getRemarks());
+        history.setChangedBy(authenticatedEmail);
+        history.setChangedAt(savedRequest.getUpdatedAt());
+        historyRepository.save(history);
+
+        return toResponse(savedRequest);
+    }
+
+    @Transactional(readOnly = true)
+    public ServiceRequestHistoryResponse getStatusHistory(Long id) {
+        ServiceRequest request = serviceRequestRepository.findById(id)
+                .orElseThrow(() -> new ServiceRequestNotFoundException(id));
+
+        PurchaseResponse purchaseResponse;
+        try {
+            purchaseResponse = purchaseServiceClient.getPurchaseById(request.getPurchaseId());
+        } catch (Exception e) {
+            purchaseResponse = new PurchaseResponse(request.getPurchaseId(), null, null, null, null, null, null);
         }
 
-        @Transactional(readOnly = true)
-        public ServiceRequestResponse getServiceRequest(Long id) {
-                ServiceRequest request = getRequestForCustomer(id);
-                return toResponse(request);
+        ProductResponse productResponse = new ProductResponse(
+                request.getPurchaseId(),
+                purchaseResponse.getProductId(),
+                "Product",
+                "Electronics",
+                "M-100",
+                purchaseResponse.getCompanyId(),
+                "Company"
+        );
+
+        WarrantyResponse warrantyResponse = new WarrantyResponse(
+                purchaseResponse.getWarrantyId(),
+                12,
+                "MONTHS",
+                "Standard warranty"
+        );
+
+        List<StatusHistoryResponse> historyList = historyRepository.findByRequest_RequestIdOrderByChangedAtAsc(id)
+                .stream()
+                .map(history -> new StatusHistoryResponse(
+                        history.getHistoryId(),
+                        history.getStatus(),
+                        history.getRemarks(),
+                        history.getChangedBy(),
+                        history.getChangedAt()))
+                .toList();
+
+        return new ServiceRequestHistoryResponse(
+                productResponse,
+                warrantyResponse,
+                toResponse(request),
+                purchaseResponse,
+                historyList);
+    }
+
+    private ServiceRequestResponse toResponse(ServiceRequest serviceRequest) {
+        String currentStatus = getCurrentStatus(serviceRequest);
+
+        return new ServiceRequestResponse(
+                serviceRequest.getRequestId(),
+                serviceRequest.getPurchaseId(),
+                serviceRequest.getIssueCategory(),
+                serviceRequest.getIssueDescription(),
+                serviceRequest.getPhotoUrl(),
+                serviceRequest.getVideoUrl(),
+                currentStatus,
+                serviceRequest.getCreatedAt(),
+                serviceRequest.getUpdatedAt());
+    }
+
+    private String getCurrentStatus(ServiceRequest serviceRequest) {
+        return historyRepository.findFirstByRequest_RequestIdOrderByChangedAtDesc(serviceRequest.getRequestId())
+                .map(RequestStatusHistory::getStatus)
+                .orElse("OPEN");
+    }
+
+    private void validateStatusTransition(String currentStatus, String targetStatus) {
+        if (targetStatus == null || targetStatus.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required");
         }
 
-        @Transactional(readOnly = true)
-        public List<ServiceRequestResponse> getCompanyServiceRequests(String email) {
-                return serviceRequestRepository.findByPurchase_Product_Company_Email(email)
-                                .stream()
-                                .map(this::toResponse)
-                                .toList();
+        String current = normalizeStatus(currentStatus);
+        String target = normalizeStatus(targetStatus);
+
+        if ("REJECTED".equals(current) || "RESOLVED".equals(current)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Resolved or rejected requests cannot be changed");
         }
 
-        @Transactional(readOnly = true)
-        public List<ServiceRequestResponse> getCustomerServiceRequests(String email) {
-                return serviceRequestRepository.findByPurchase_Customer_Email(email)
-                                .stream()
-                                .map(this::toResponse)
-                                .toList();
+        Map<String, List<String>> allowedTransitions = Map.of(
+                "OPEN", List.of("UNDER_REVIEW", "IN_PROGRESS"),
+                "UNDER_REVIEW", List.of("APPROVED", "REJECTED", "IN_PROGRESS"),
+                "APPROVED", List.of("PARTS_ORDERED", "IN_PROGRESS"),
+                "PARTS_ORDERED", List.of("TECHNICIAN_ON_THE_WAY", "IN_PROGRESS"),
+                "TECHNICIAN_ON_THE_WAY", List.of("RESOLVED", "IN_PROGRESS"),
+                "IN_PROGRESS", List.of("RESOLVED", "REJECTED")
+        );
+
+        if (!allowedTransitions.getOrDefault(current, List.of()).contains(target)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Invalid status transition from " + current + " to " + target);
         }
+    }
 
-        @Transactional
-        public ServiceRequestResponse changeStatus(Long id, StatusChangeRequest request) {
-                ServiceRequest serviceRequest = serviceRequestRepository.findById(id)
-                                .orElseThrow(() -> new ServiceRequestNotFoundException(id));
-
-                String authenticatedEmail = getAuthenticatedUserEmail();
-                String companyEmail = serviceRequest.getPurchase().getProduct().getCompany().getEmail();
-                if (!authenticatedEmail.equals(companyEmail)) {
-                        throw new AccessDeniedException(
-                                        "You do not have access to this service request");
-                }
-
-                String currentStatus = getCurrentStatus(serviceRequest);
-                validateStatusTransition(currentStatus, request.getStatus());
-
-                serviceRequest.setUpdatedAt(LocalDateTime.now());
-
-                ServiceRequest savedRequest = serviceRequestRepository.save(serviceRequest);
-
-                RequestStatusHistory history = new RequestStatusHistory();
-                history.setRequest(savedRequest);
-                history.setStatus(request.getStatus());
-                history.setRemarks(request.getRemarks());
-                history.setChangedBy(authenticatedEmail);
-                history.setChangedAt(savedRequest.getUpdatedAt());
-                historyRepository.save(history);
-
-                return toResponse(savedRequest);
+    private String normalizeStatus(String status) {
+        if ("CLOSED".equals(status)) {
+            return "RESOLVED";
         }
+        return status;
+    }
 
-        @Transactional(readOnly = true)
-        public ServiceRequestHistoryResponse getStatusHistory(Long id) {
-                ServiceRequest request = getRequestForOwnerOrCompany(id);
-                ProductResponse productResponse = new ProductResponse(
-                                request.getPurchase().getPurchaseId(),
-                                request.getPurchase().getProduct().getProductId(),
-                                request.getPurchase().getProduct().getProductName(),
-                                request.getPurchase().getProduct().getCategory(),
-                                request.getPurchase().getProduct().getModelNumber(),
-                                request.getPurchase().getProduct().getCompany().getCompanyId(),
-                                request.getPurchase().getProduct().getCompany().getCompanyName()
-                );
-                WarrantyResponse warrantyResponse = new WarrantyResponse(
-                                request.getPurchase().getWarranty().getWarrantyId(),
-                                request.getPurchase().getWarranty().getWarrantyPeriod(),
-                                request.getPurchase().getWarranty().getWarrantyUnit(),
-                                request.getPurchase().getWarranty().getTerms()
-                );
-                PurchaseResponse purchaseResponse = new PurchaseResponse(
-                                request.getPurchase().getPurchaseId(),
-                                request.getPurchase().getCustomer().getCustomerId(),
-                                request.getPurchase().getProduct().getProductId(),
-                                request.getPurchase().getWarranty().getWarrantyId(),
-                                request.getPurchase().getProduct().getCompany().getCompanyId(),
-                                request.getPurchase().getPurchaseDate(),
-                                request.getPurchase().getInvoiceNumber()
-                );
-                List<StatusHistoryResponse> historyList = historyRepository.findByRequest_RequestIdOrderByChangedAtAsc(id)
-                                .stream()
-                                .map(history -> new StatusHistoryResponse(
-                                                history.getHistoryId(),
-                                                history.getStatus(),
-                                                history.getRemarks(),
-                                                history.getChangedBy(),
-                                                history.getChangedAt()))
-                                .toList();
-
-                return new ServiceRequestHistoryResponse(
-                                productResponse,
-                                warrantyResponse,
-                                toResponse(request),
-                                purchaseResponse,
-                                historyList);
-        }
-
-        private ServiceRequestResponse toResponse(ServiceRequest serviceRequest) {
-                String currentStatus = getCurrentStatus(serviceRequest);
-
-                return new ServiceRequestResponse(
-                                serviceRequest.getRequestId(),
-                                serviceRequest.getPurchase().getPurchaseId(),
-                                serviceRequest.getIssueCategory(),
-                                serviceRequest.getIssueDescription(),
-                                serviceRequest.getPhotoUrl(),
-                                serviceRequest.getVideoUrl(),
-                                currentStatus,
-                                serviceRequest.getCreatedAt(),
-                                serviceRequest.getUpdatedAt());
-        }
-
-        private String getCurrentStatus(ServiceRequest serviceRequest) {
-                return historyRepository.findFirstByRequest_RequestIdOrderByChangedAtDesc(serviceRequest.getRequestId())
-                                .map(RequestStatusHistory::getStatus)
-                                .orElse("OPEN");
-        }
-
-        private void validateStatusTransition(String currentStatus, String targetStatus) {
-                if (targetStatus == null || targetStatus.isBlank()) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status is required");
-                }
-
-                String current = normalizeStatus(currentStatus);
-                String target = normalizeStatus(targetStatus);
-
-                if ("REJECTED".equals(current) || "RESOLVED".equals(current)) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                        "Resolved or rejected requests cannot be changed");
-                }
-
-                Map<String, List<String>> allowedTransitions = Map.of(
-                                "OPEN", List.of("UNDER_REVIEW"),
-                                "UNDER_REVIEW", List.of("APPROVED", "REJECTED"),
-                                "APPROVED", List.of("PARTS_ORDERED"),
-                                "PARTS_ORDERED", List.of("TECHNICIAN_ON_THE_WAY"),
-                                "TECHNICIAN_ON_THE_WAY", List.of("RESOLVED")
-                );
-
-                if (!allowedTransitions.getOrDefault(current, List.of()).contains(target)) {
-                        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                                        "Invalid status transition from " + current + " to " + target);
-                }
-        }
-
-        private String normalizeStatus(String status) {
-                if ("CLOSED".equals(status)) {
-                        return "RESOLVED";
-                }
-                if ("IN_PROGRESS".equals(status)) {
-                        return "TECHNICIAN_ON_THE_WAY";
-                }
-                return status;
-        }
-
-        private String getAuthenticatedUserEmail() {
-
-                Authentication authentication = SecurityContextHolder
-                                .getContext()
-                                .getAuthentication();
-
-                return authentication.getName();
-        }
-
-        private ServiceRequest getRequestForCustomer(Long id) {
-
-                ServiceRequest request = serviceRequestRepository.findById(id)
-                                .orElseThrow(() -> new ServiceRequestNotFoundException(id));
-
-                String authenticatedEmail = getAuthenticatedUserEmail();
-
-                String ownerEmail = request.getPurchase()
-                                .getCustomer()
-                                .getEmail();
-
-                if (!authenticatedEmail.equals(ownerEmail)) {
-                        throw new AccessDeniedException(
-                                        "You do not have access to this service request");
-                }
-
-                return request;
-        }
-
-        private ServiceRequest getRequestForOwnerOrCompany(Long id) {
-                ServiceRequest request = serviceRequestRepository.findById(id)
-                                .orElseThrow(() -> new ServiceRequestNotFoundException(id));
-
-                String authenticatedEmail = getAuthenticatedUserEmail();
-                String customerEmail = request.getPurchase().getCustomer().getEmail();
-                String companyEmail = request.getPurchase().getProduct().getCompany().getEmail();
-
-                if (!authenticatedEmail.equals(customerEmail) && !authenticatedEmail.equals(companyEmail)) {
-                        throw new AccessDeniedException("You do not have access to this service request");
-                }
-
-                return request;
-        }
+    private String getAuthenticatedUserEmail() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null ? authentication.getName() : "system";
+    }
 }

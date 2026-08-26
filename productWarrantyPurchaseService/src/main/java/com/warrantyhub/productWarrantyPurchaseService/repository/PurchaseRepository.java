@@ -6,5 +6,5 @@ import java.util.List;
 
 public interface PurchaseRepository
         extends JpaRepository<Purchase, Long> {
-    List<Purchase> findByCustomer_Email(String email);
+    List<Purchase> findByCustomerEmail(String email);
 }

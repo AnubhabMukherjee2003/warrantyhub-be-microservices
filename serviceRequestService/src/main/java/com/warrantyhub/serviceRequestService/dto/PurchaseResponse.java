@@ -12,6 +12,9 @@ public class PurchaseResponse {
     private LocalDate purchaseDate;
     private String invoiceNumber;
 
+    public PurchaseResponse() {
+    }
+
     public PurchaseResponse(Long purchaseId, Long customerId, Long productId, Long warrantyId,
                             Long companyId, LocalDate purchaseDate, String invoiceNumber) {
         this.purchaseId = purchaseId;

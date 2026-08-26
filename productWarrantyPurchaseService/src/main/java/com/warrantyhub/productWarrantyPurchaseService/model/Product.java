@@ -13,10 +13,9 @@ public class Product {
     private String productName;
     private String category;
     private String modelNumber;
-
-    @ManyToOne
-    @JoinColumn(name = "company_id")
-    private Company company;
+    private Long companyId;
+    private String companyName;
+    private String companyEmail;
 
     public Long getProductId() {
         return productId;
@@ -50,13 +49,27 @@ public class Product {
         this.modelNumber = modelNumber;
     }
 
-    public Company getCompany() {
-        return company;
+    public Long getCompanyId() {
+        return companyId;
     }
 
-    public void setCompany(Company company) {
-        this.company = company;
+    public void setCompanyId(Long companyId) {
+        this.companyId = companyId;
     }
 
-    
+    public String getCompanyName() {
+        return companyName;
+    }
+
+    public void setCompanyName(String companyName) {
+        this.companyName = companyName;
+    }
+
+    public String getCompanyEmail() {
+        return companyEmail;
+    }
+
+    public void setCompanyEmail(String companyEmail) {
+        this.companyEmail = companyEmail;
+    }
 }

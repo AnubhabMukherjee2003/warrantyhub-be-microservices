@@ -29,12 +29,28 @@ public class CompanyService {
         company.setStatus(request.getStatus());
 
         Company savedCompany = companyRepository.save(company);
+        return toResponse(savedCompany);
+    }
+
+    public CompanyResponse getCompanyByEmail(String email) {
+        Company company = companyRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Company not found with email: " + email));
+        return toResponse(company);
+    }
+
+    public CompanyResponse getCompanyById(Long id) {
+        Company company = companyRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Company not found with id: " + id));
+        return toResponse(company);
+    }
+
+    private CompanyResponse toResponse(Company company) {
         return new CompanyResponse(
-                savedCompany.getCompanyId(),
-                savedCompany.getCompanyName(),
-                savedCompany.getEmail(),
-                savedCompany.getPhone(),
-                savedCompany.getStatus()
+                company.getCompanyId(),
+                company.getCompanyName(),
+                company.getEmail(),
+                company.getPhone(),
+                company.getStatus()
         );
     }
 }

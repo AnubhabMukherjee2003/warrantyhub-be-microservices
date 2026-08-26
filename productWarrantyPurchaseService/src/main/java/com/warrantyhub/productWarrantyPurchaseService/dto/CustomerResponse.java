@@ -7,6 +7,9 @@ public class CustomerResponse {
     private String email;
     private String phone;
 
+    public CustomerResponse() {
+    }
+
     public CustomerResponse(
             Long customerId,
             String name,

@@ -11,9 +11,7 @@ public class ServiceRequest {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long requestId;
 
-    @ManyToOne
-    @JoinColumn(name = "purchase_id")
-    private Purchase purchase;
+    private Long purchaseId;
 
     private String issueCategory;
 
@@ -35,12 +33,12 @@ public class ServiceRequest {
         this.requestId = requestId;
     }
 
-    public Purchase getPurchase() {
-        return purchase;
+    public Long getPurchaseId() {
+        return purchaseId;
     }
 
-    public void setPurchase(Purchase purchase) {
-        this.purchase = purchase;
+    public void setPurchaseId(Long purchaseId) {
+        this.purchaseId = purchaseId;
     }
 
     public String getIssueCategory() {
@@ -90,6 +88,4 @@ public class ServiceRequest {
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
     }
-
-    // getters and setters
 }

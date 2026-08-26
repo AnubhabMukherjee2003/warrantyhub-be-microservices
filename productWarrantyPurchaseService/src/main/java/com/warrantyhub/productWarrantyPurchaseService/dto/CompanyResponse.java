@@ -8,6 +8,9 @@ public class CompanyResponse {
     private String phone;
     private String status;
 
+    public CompanyResponse() {
+    }
+
     public CompanyResponse(Long companyId, String companyName, String email, String phone, String status) {
         this.companyId = companyId;
         this.companyName = companyName;

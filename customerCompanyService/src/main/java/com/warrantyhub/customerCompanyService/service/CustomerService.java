@@ -2,29 +2,22 @@ package com.warrantyhub.customerCompanyService.service;
 
 import com.warrantyhub.customerCompanyService.dto.CustomerRequest;
 import com.warrantyhub.customerCompanyService.dto.CustomerResponse;
-import com.warrantyhub.customerCompanyService.dto.ProductResponse;
 import com.warrantyhub.customerCompanyService.exception.CustomerNotFoundException;
 import com.warrantyhub.customerCompanyService.model.Customer;
-import com.warrantyhub.customerCompanyService.model.Product;
 import com.warrantyhub.customerCompanyService.repository.CustomerRepository;
-import com.warrantyhub.customerCompanyService.repository.PurchaseRepository;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 public class CustomerService {
 
     private final CustomerRepository customerRepository;
     private final PasswordEncoder passwordEncoder;
-    private final PurchaseRepository purchaseRepository;
 
-    public CustomerService(CustomerRepository customerRepository, PasswordEncoder passwordEncoder, PurchaseRepository purchaseRepository) {
+    public CustomerService(CustomerRepository customerRepository, PasswordEncoder passwordEncoder) {
         this.customerRepository = customerRepository;
         this.passwordEncoder = passwordEncoder;
-        this.purchaseRepository = purchaseRepository;
     }
 
     @Transactional(readOnly = true)
@@ -35,22 +28,10 @@ public class CustomerService {
     }
 
     @Transactional(readOnly = true)
-    public List<ProductResponse> getCustomerProducts(String email) {
-        return purchaseRepository.findByCustomer_Email(email)
-                .stream()
-                .map(purchase -> {
-                    Product p = purchase.getProduct();
-                    return new ProductResponse(
-                            purchase.getPurchaseId(),
-                            p.getProductId(),
-                            p.getProductName(),
-                            p.getCategory(),
-                            p.getModelNumber(),
-                            p.getCompany().getCompanyId(),
-                            p.getCompany().getCompanyName()
-                    );
-                })
-                .toList();
+    public CustomerResponse getCustomerByEmail(String email) {
+        Customer customer = customerRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Customer not found with email: " + email));
+        return toResponse(customer);
     }
 
     @Transactional

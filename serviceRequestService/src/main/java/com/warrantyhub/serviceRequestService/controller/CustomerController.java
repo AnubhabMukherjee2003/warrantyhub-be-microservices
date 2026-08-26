@@ -1,15 +1,12 @@
 package com.warrantyhub.serviceRequestService.controller;
 
-import com.warrantyhub.serviceRequestService.dto.CustomerRequest;
-import com.warrantyhub.serviceRequestService.dto.CustomerResponse;
-import com.warrantyhub.serviceRequestService.dto.ProductResponse;
 import com.warrantyhub.serviceRequestService.dto.ServiceRequestResponse;
-import com.warrantyhub.serviceRequestService.service.CustomerService;
 import com.warrantyhub.serviceRequestService.service.ServiceRequestService;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -17,43 +14,15 @@ import java.util.List;
 @RequestMapping("/api/customers")
 public class CustomerController {
 
-    private final CustomerService customerService;
     private final ServiceRequestService serviceRequestService;
 
-    public CustomerController(CustomerService customerService, ServiceRequestService serviceRequestService) {
-        this.customerService = customerService;
+    public CustomerController(ServiceRequestService serviceRequestService) {
         this.serviceRequestService = serviceRequestService;
-    }
-
-    @GetMapping("/me/products")
-    public ResponseEntity<List<ProductResponse>> getMyProducts(Authentication authentication) {
-        return ResponseEntity.ok(customerService.getCustomerProducts(authentication.getName()));
     }
 
     @GetMapping("/service-requests")
     public ResponseEntity<List<ServiceRequestResponse>> getMyServiceRequests(Authentication authentication) {
-        return ResponseEntity.ok(serviceRequestService.getCustomerServiceRequests(authentication.getName()));
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<CustomerResponse> getCustomer(@PathVariable Long id) {
-        return ResponseEntity.ok(customerService.getCustomer(id));
-    }
-
-    @PostMapping
-    public ResponseEntity<CustomerResponse> createCustomer(@RequestBody CustomerRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED).body(customerService.createCustomer(request));
-    }
-
-    @PutMapping("/{id}")
-    public ResponseEntity<CustomerResponse> updateCustomer(@PathVariable Long id,
-                                                           @RequestBody CustomerRequest request) {
-        return ResponseEntity.ok(customerService.updateCustomer(id, request));
-    }
-
-    @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteCustomer(@PathVariable Long id) {
-        customerService.deleteCustomer(id);
-        return ResponseEntity.noContent().build();
+        String email = authentication != null ? authentication.getName() : "";
+        return ResponseEntity.ok(serviceRequestService.getCustomerServiceRequests(email));
     }
 }
